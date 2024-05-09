@@ -1,0 +1,69 @@
+import cv2
+import mediapipe as mp
+import math
+
+mp_drawing = mp.solutions.drawing_utils
+mp_hands = mp.solutions.hands
+
+# Setup mediapipe instance
+with mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.5) as hands:
+    cam = cv2.VideoCapture(0)
+    cam.set(cv2.CAP_PROP_FRAME_WIDTH, 1200)
+    cam.set(cv2.CAP_PROP_FRAME_HEIGHT, 800)
+    cam.set(cv2.CAP_PROP_FPS, 30)
+    cam.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+
+    ok_count = 0  # Initialize OK gesture count
+
+    while cam.isOpened():
+        ret, img = cam.read()
+
+        # Recolor image to RGB
+        imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+        # Make detection
+        results = hands.process(imgRGB)
+
+        # Recolor back to BGR
+        imgRGB = cv2.cvtColor(imgRGB, cv2.COLOR_RGB2BGR)
+
+        # Extract landmarks
+        if results.multi_hand_landmarks:
+            ok_count = 0  # Reset OK gesture count for each frame
+
+            for hand_landmarks in results.multi_hand_landmarks:
+                # Draw hand landmarks and connections
+                mp_drawing.draw_landmarks(imgRGB, hand_landmarks, mp_hands.HAND_CONNECTIONS,
+                                          mp_drawing.DrawingSpec(color=(0, 255, 255), thickness=2, circle_radius=4),
+                                          mp_drawing.DrawingSpec(color=(0, 100, 0), thickness=2))
+
+                # Get coordinates from hand landmarks
+                thumb_tip = hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_TIP]
+                index_finger_tip = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
+
+                # Calculate distance between thumb tip and index finger tip
+                distance = math.sqrt((thumb_tip.x - index_finger_tip.x) ** 2 + (thumb_tip.y - index_finger_tip.y) ** 2)
+
+                # Example: Detect scissor hand gesture
+                if distance < 0.05:
+                    hand_status = "Scissor"
+
+                    # Count OK gestures
+                    ok_count += 1
+
+        # Check OK gesture count and display corresponding message
+        if ok_count >= 2 or ok_count == 0:
+            error_message = "OFF"
+            cv2.putText(imgRGB, error_message, (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 50, 200), 3)
+        elif ok_count == 1:
+            cv2.putText(imgRGB, "ON", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 3, (100, 200, 250), 3)
+        else:
+            cv2.putText(imgRGB, "OFF", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 50, 200), 3)
+
+        cv2.imshow('ON or OFF', imgRGB)
+
+        if cv2.waitKey(5) & 0xFF == 27:
+            break
+
+    cam.release()
+    cv2.destroyAllWindows()
